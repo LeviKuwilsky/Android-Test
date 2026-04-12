@@ -242,6 +242,7 @@ LazyColumn(modifier = Modifier.weight(1f)) {
 
 
 
+---------------------
 
 
 
@@ -249,8 +250,7 @@ LazyColumn(modifier = Modifier.weight(1f)) {
 
 
 
-
-    # 🚀 WMC Android Test: Der Masterplan
+#  🚀 WMC Android Test: Der Masterplan
 
 ## 1. Projekt-Setup & Konfiguration
 Bevor du startest, müssen die Abhängigkeiten (Dependencies) stimmen. Ohne diese funktioniert die Navigation und Serialisierung nicht.
