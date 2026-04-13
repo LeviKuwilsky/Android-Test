@@ -624,3 +624,16 @@ fun ProfileScreen(viewModel: UserViewModel) {
 5.  **Imports funktionieren nicht (rot)**
     -> Alt+Enter drücken. Achte darauf, die `androidx.compose...` oder `androidx.navigation...` Imports auszuwählen, nicht die alten Android-Imports.
 
+### Bilder & Icons hinzufügen
+1. Bild kopieren -> Rechtsklick auf `res/drawable` -> Paste. (Name: nur Kleinbuchstaben!)
+2. Code:
+```kotlin
+Image(
+    painter = painterResource(id = R.drawable.mein_bild),
+    contentDescription = null,
+    modifier = Modifier.size(100.dp),
+    contentScale = ContentScale.Crop
+)
+
+Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.Red)
+```
