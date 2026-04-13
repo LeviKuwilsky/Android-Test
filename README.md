@@ -637,3 +637,25 @@ Image(
 
 Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.Red)
 ```
+
+## 5. Android Studio Crash Course & Performance
+
+### Performance-Turbo (Echtes Handy)
+1. Handy: **Einstellungen > Über das Telefon > 7x auf "Build-Nummer" tippen**.
+2. **Entwickleroptionen > USB-Debugging AN**.
+3. Handy per USB an PC -> In Android Studio oben Handy auswählen statt Emulator.
+
+### Wichtige Shortcuts
+* **Alt + Enter**: Fehler beheben / Importieren.
+* **Strg + Alt + L**: Code perfekt formatieren.
+* **Doppel-Shift**: Alles suchen.
+* **Strg + /**: Zeile auskommentieren.
+
+### Debugging (Wenn es kracht)
+1. **Logcat** (unten) öffnen.
+2. Filter: `FATAL EXCEPTION`.
+3. Den blauen Link in der Fehlermeldung klicken -> springt direkt zur kaputten Zeile.
+
+### Notfall-Protokoll (Wenn AS spinnt)
+1. `Build > Clean Project`.
+2. `File > Invalidate Caches... > Invalidate and Restart`.
