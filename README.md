@@ -659,3 +659,138 @@ Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Col
 ### Notfall-Protokoll (Wenn AS spinnt)
 1. `Build > Clean Project`.
 2. `File > Invalidate Caches... > Invalidate and Restart`.
+
+
+
+
+
+Dieses Dokument dient als Referenz für den Aufbau von modernen Android-Apps mit Jetpack Compose, Type-Safe Navigation und State Management.
+
+## 1. Projekt-Setup (Gradle & Dependencies)
+
+Für die neue, typsichere Navigation muss das Kotlin-Serialisierungs-Plugin in der `build.gradle.kts` (Project & App) aktiv sein.
+
+### Plugins
+```kotlin
+plugins {
+    // ... andere Plugins
+    kotlin("plugin.serialization") version "1.9.x" // passend zur Kotlin Version
+}
+```
+
+### Dependencies
+```kotlin
+dependencies {
+    val navVersion = "2.8.0-alpha08" // oder aktuellste Version
+    implementation("androidx.navigation:navigation-compose:$navVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
+}
+```
+
+## 2. Typsichere Navigation definieren
+
+Anstatt Strings (Routes) verwenden wir `@Serializable` Objekte oder Klassen.
+
+```kotlin
+import kotlinx.serialization.Serializable
+
+// Routen als Objekte definieren
+@Serializable object StartRoute
+@Serializable object DetailRoute
+@Serializable object SettingsRoute
+
+// Falls Parameter übergeben werden müssen:
+// @Serializable data class UserRoute(val id: String)
+```
+
+## 3. Navigation Graph & Scaffold Struktur
+
+Der `NavHost` steuert den Wechsel zwischen den Screens. Ein `Scaffold` bietet den Rahmen für TopBars und BottomBars.
+
+```kotlin
+@Composable
+fun AppNavigation() {
+    val navController = rememberNavController()
+
+    NavHost(
+        navController = navController,
+        startDestination = StartRoute
+    ) {
+        composable<StartRoute> { 
+            StartScreen(
+                onNavigateToDetail = { navController.navigate(DetailRoute) }
+            ) 
+        }
+        composable<DetailRoute> { 
+            DetailScreen(
+                onBack = { navController.popBackStack() }
+            ) 
+        }
+    }
+}
+```
+
+## 4. State Management (ViewModel)
+
+Um Daten zwischen Screens zu teilen oder bei Konfigurationsänderungen (z.B. Drehen des Bildschirms) zu behalten, nutzt man ein `ViewModel`.
+
+```kotlin
+import androidx.lifecycle.ViewModel
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+
+class AppViewModel : ViewModel() {
+    // Interner State, nach außen nur lesbar
+    var globalCounter by mutableIntStateOf(0)
+        private set
+
+    fun increment() {
+        globalCounter++
+    }
+
+    fun reset() {
+        globalCounter = 0
+    }
+}
+```
+
+## 5. UI-Komponenten & Best Practices
+
+### Scaffold mit TopAppBar
+```kotlin
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BaseScreen(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    content: @Composable (PaddingValues) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        }
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        content(innerPadding)
+    }
+}
+```
+
+### Lokaler State vs. Globaler State
+- **Lokaler State:** Nutze `remember { mutableIntStateOf(...) }` für Dinge, die nur diesen Screen betreffen (z.B. Eingabe in einem Textfeld vor dem Absenden).
+- **Globaler State:** Nutze das `ViewModel` für Daten, die in der Übersicht (Overview) angezeigt werden sollen.
+
+### Navigation-Logik Tipps
+- `navController.navigate(Route)`: Geht einen Schritt vorwärts.
+- `navController.popBackStack()`: Geht einen Schritt zurück.
+- `popUpTo(Route) { inclusive = true }`: Löscht den Verlauf bis zu einer bestimmten Route (wichtig für „Übernehmen“/Speichern-Buttons, damit man nicht zurück zum leeren Formular kommt).
