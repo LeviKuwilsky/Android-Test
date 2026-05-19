@@ -171,3 +171,34 @@ Das Android-Manifest, das die essenziellen Netzwerkberechtigungen für Retrofit 
 
 </manifest>
 ```
+
+---
+# Versions- & Update-Guide für Android-Projekte (Android Studio & Gradle)
+
+```bash
+./update_project.sh
+```
+Dieser Guide dient als Referenz, um sicherzustellen, dass die Entwicklungsumgebung, der Gradle-Wrapper sowie alle Projekt-Dependencies stets auf dem aktuellsten, stabilen Stand sind. Dies ist besonders für die Abgabe bei versionstreuen Prüfern relevant.
+
+---
+
+## 1. Entwicklungsumgebung (Android Studio)
+
+Um Android Studio ohne manuellen Aufwand plattformübergreifend aktuell zu halten, wird die **JetBrains Toolbox** genutzt. Sie verwaltet Updates im Hintergrund und ermöglicht ein sicheres Verwalten der IDE-Versionen.
+
+* **Vorteil:** Verhindert Versionskonflikte im System und aktualisiert die IDE sauber im Hintergrund.
+* **Integrierter AGP-Assistent:** Für das Android Gradle Plugin (AGP) selbst sollte innerhalb der IDE immer der **AGP Upgrade Assistant** unter `Tools > AGP Upgrade Assistant...` verwendet werden, da dieser automatische Code-Refactorings in den `build.gradle.kts`-Dateien vornimmt.
+
+---
+
+## 2. Automatischer Dependency Checker (Plugin-Setup)
+
+Um veraltete Bibliotheken im Projekt schnell zu identifizieren, wird das `ben-manes` Versions-Plugin in die projektweite `build.gradle.kts` eingebunden.
+
+Füge folgende Zeile in die `plugins`-Block deiner **projektweiten** `build.gradle.kts` ein:
+
+```kotlin
+plugins {
+    // Bestehende Plugins ...
+    id("com.github.ben-manes.versions") version "0.51.0"
+}
