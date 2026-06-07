@@ -1,4 +1,4 @@
-# 🛠️ Android Cheat-Sheet — Room · Retrofit · Saubere Architektur
+# Android — Room · Retrofit · Saubere Architektur
 
 > Kotlin · Jetpack Compose · MVVM · Coroutines/Flow · Room · Retrofit
 > Alles, was man für „Mischung Retrofit + Room + saubere Architektur" braucht.
