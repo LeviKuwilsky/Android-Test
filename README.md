@@ -32,17 +32,17 @@
 **Regel:** Daten fließen in **eine** Richtung. UI kennt nur das ViewModel, das ViewModel kennt nur das Repository, das Repository kennt die Datenquellen (Room + Retrofit). Niemals überspringen.
 
 ```
-┌──────────────┐   StateFlow    ┌────────────┐   Flow/suspend   ┌──────────────┐
+┌──────────────┐   StateFlow     ┌────────────┐   Flow/suspend    ┌──────────────┐
 │   UI         │ ◀───────────── │ ViewModel  │ ◀─────────────── │ Repository   │
 │ (Compose)    │   Events ───▶  │ (UiState)  │   Aktionen ───▶  │ (Single      │
-└──────────────┘                └────────────┘                  │  Source of   │
-                                                                 │  Truth)      │
-                                                          ┌──────┴──────┐
-                                                          ▼             ▼
-                                                    ┌──────────┐  ┌──────────┐
-                                                    │  Room    │  │ Retrofit │
-                                                    │ (lokal)  │  │ (Netz)   │
-                                                    └──────────┘  └──────────┘
+└──────────────┘                 └────────────┘                   │  Source of   │
+                                                                  │  Truth)      │
+                                                                  ┌──────┴──────┐
+                                                                  ▼             ▼
+                                                             ┌──────────┐  ┌──────────┐
+                                                             │  Room    │  │ Retrofit │
+                                                             │ (lokal)  │  │ (Netz)   │
+                                                             └──────────┘  └──────────┘
 ```
 
 | Schicht | Aufgabe | Faustregeln |
@@ -592,11 +592,11 @@ sealed interface Resource<out T> {
 
 ```
    1. LESEN                 2. BERECHNEN                3. SPEICHERN
-┌──────────────┐        ┌────────────────────┐      ┌──────────────┐
-│ api.getX()   │  ───▶  │ reine Kotlin-Logik │ ───▶ │ dao.insert() │
-│ (Retrofit)   │        │ summe/avg/filter…  │      │ (Room)       │
-│  oder Eingabe│        │ (KEIN Netz/Android)│      │              │
-└──────────────┘        └────────────────────┘      └──────────────┘
+┌──────────────┐         ┌────────────────────┐      ┌──────────────┐
+│ api.getX()   │  ───▶  │ reine Kotlin-Logik │ ───▶│ dao.insert() │
+│ (Retrofit)   │         │ summe/avg/filter…  │      │ (Room)       │
+│  oder Eingabe│         │ (KEIN Netz/Android)│      │              │
+└──────────────┘         └────────────────────┘      └──────────────┘
         alles in  viewModelScope.launch { ... }  bzw. einer suspend-Funktion
 ```
 
