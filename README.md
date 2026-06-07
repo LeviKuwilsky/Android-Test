@@ -1260,3 +1260,369 @@ retrofit = "2.11.0"
 ---
 
 *Tipp für den Test: Halte dich an die Reihenfolge in Abschnitt 12 (Entity → DAO → DB → DTO/API → Repository → Application → ViewModel → UI). Wenn du diese 8 Schritte runterschreiben kannst, hast du die „saubere Architektur" + Room + Retrofit komplett abgedeckt.*
+
+
+
+
+
+
+
+
+
+---
+
+## 🎯 TEST-TAG SCHNELLSTART — „Der größere Wahlhelfer"
+
+> **Open-Book-Strategie:** Diesen Block von oben nach unten abarbeiten. Code ist schon auf `Party`/`votes` gemünzt — du musst NICHTS mehr umbenennen, nur **Package-Name** anpassen und Lücken füllen.
+> **#1-Falle vermeiden:** überall `at.htl.wahlhelfer` durch deinen echten Package-Namen ersetzen (Strg+R „Replace in Files").
+
+### 📁 Genaue Ordner-/Package-Struktur
+> Package frei wählbar — nur **nicht** `com.example`. Beispiel: `at.htl.wahlhelfer`.
+
+```
+app/src/main/
+├── AndroidManifest.xml                 # INTERNET-Permission (falls Retrofit) + android:name=".WahlhelferApp"
+└── java/at/htl/wahlhelfer/
+    ├── WahlhelferApp.kt                # Application = DI-Container (hält das Repository)
+    ├── MainActivity.kt                 # setContent { Theme { WahlhelferNavHost() } }
+    │
+    ├── data/                           # ── DATEN-SCHICHT ──
+    │   ├── local/
+    │   │   ├── Party.kt                # @Entity  (eine Tabelle)
+    │   │   ├── PartyDao.kt             # @Dao     (DB-Zugriff, gibt Flow zurück)
+    │   │   └── AppDatabase.kt          # @Database (Singleton)
+    │   └── PartyRepository.kt          # einzige Brücke zur DB
+    │
+    └── ui/                             # ── UI-SCHICHT ──
+        ├── AppViewModelProvider.kt     # ViewModel-Factory (gibt Repo rein)
+        ├── navigation/
+        │   └── WahlhelferNavHost.kt    # Routes + NavHost
+        ├── home/HomeScreen.kt
+        ├── count/
+        │   ├── CountViewModel.kt
+        │   └── CountScreen.kt
+        ├── overview/
+        │   ├── OverviewViewModel.kt
+        │   └── OverviewScreen.kt
+        ├── about/AboutScreen.kt
+        └── theme/                      # kommt aus „Empty Activity", unverändert lassen
+```
+
+**Faustregel:** Eine Datei = eine Klasse. Package = Ordner. Daten unten, UI oben, dazwischen nur das Repository.
+
+### ✅ Baureihenfolge — 8 Schritte (genau so abtippen)
+
+> Nach jedem Block einmal bauen lohnt sich. Reihenfolge ist wichtig: untere Schichten zuerst.
+
+**① Dependencies** → Abschnitt [2](#2-gradle--dependencies) kopieren. Pflicht: `ksp`-Plugin + `room-runtime`/`room-ktx`/`room-compiler`, `lifecycle-viewmodel-compose`, `lifecycle-runtime-compose`. Für Navigation zusätzlich:
+```kotlin
+implementation("androidx.navigation:navigation-compose:2.8.+")   // aktuelle Version prüfen
+```
+
+**② `data/local/Party.kt` — Entity**
+```kotlin
+package at.htl.wahlhelfer.data.local
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "parties")
+data class Party(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val votes: Int = 0
+)
+```
+
+**③ `data/local/PartyDao.kt` — DAO**
+```kotlin
+package at.htl.wahlhelfer.data.local
+import androidx.room.*
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface PartyDao {
+    @Query("SELECT * FROM parties ORDER BY votes DESC")
+    fun observeAll(): Flow<List<Party>>              // LESEN: Flow, kein suspend
+
+    @Query("SELECT COALESCE(SUM(votes), 0) FROM parties")
+    fun observeTotal(): Flow<Int>                    // Gesamtsumme reaktiv
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(party: Party): Long           // SCHREIBEN: suspend
+
+    @Query("UPDATE parties SET votes = MAX(0, votes + :delta) WHERE id = :id")
+    suspend fun changeVotes(id: Long, delta: Int)    // +1 / -1, nie unter 0
+
+    @Query("UPDATE parties SET votes = 0")
+    suspend fun resetAll()                           // alle Stimmen auf 0 ("Reset")
+
+    @Query("SELECT COUNT(*) FROM parties")
+    suspend fun count(): Int
+}
+```
+
+**④ `data/local/AppDatabase.kt` — Database (Singleton)**
+```kotlin
+package at.htl.wahlhelfer.data.local
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+
+@Database(entities = [Party::class], version = 1, exportSchema = false)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun partyDao(): PartyDao
+
+    companion object {
+        @Volatile private var INSTANCE: AppDatabase? = null
+        fun getInstance(context: Context): AppDatabase =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: Room.databaseBuilder(
+                    context.applicationContext, AppDatabase::class.java, "wahlhelfer.db"
+                ).build().also { INSTANCE = it }
+            }
+    }
+}
+```
+
+**⑤ `data/PartyRepository.kt` — Repository**
+```kotlin
+package at.htl.wahlhelfer.data
+import at.htl.wahlhelfer.data.local.Party
+import at.htl.wahlhelfer.data.local.PartyDao
+import kotlinx.coroutines.flow.Flow
+
+class PartyRepository(private val dao: PartyDao) {
+    val parties: Flow<List<Party>> = dao.observeAll()   // UI liest IMMER hier
+    val total: Flow<Int> = dao.observeTotal()
+
+    suspend fun plus(p: Party)  = dao.changeVotes(p.id, +1)   // sofort speichern
+    suspend fun minus(p: Party) = dao.changeVotes(p.id, -1)
+    suspend fun reset()         = dao.resetAll()
+
+    // Demo-Parteien anlegen, falls DB leer (statt eigener Eingabemaske):
+    suspend fun seedIfEmpty() {
+        if (dao.count() == 0)
+            listOf("SPÖ", "ÖVP", "FPÖ", "GRÜNE", "NEOS").forEach { dao.insert(Party(name = it)) }
+    }
+}
+```
+
+**⑥ `WahlhelferApp.kt` (+ Manifest)** — manuelle DI
+```kotlin
+package at.htl.wahlhelfer
+import android.app.Application
+import at.htl.wahlhelfer.data.PartyRepository
+import at.htl.wahlhelfer.data.local.AppDatabase
+
+class WahlhelferApp : Application() {
+    val repository by lazy { PartyRepository(AppDatabase.getInstance(this).partyDao()) }
+}
+```
+```xml
+<!-- AndroidManifest.xml: im <application>-Tag ergänzen -->
+<application android:name=".WahlhelferApp" ... >
+```
+
+**⑦ ViewModels + Factory**
+```kotlin
+// ui/AppViewModelProvider.kt
+package at.htl.wahlhelfer.ui
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import at.htl.wahlhelfer.WahlhelferApp
+import at.htl.wahlhelfer.ui.count.CountViewModel
+import at.htl.wahlhelfer.ui.overview.OverviewViewModel
+
+object AppViewModelProvider {
+    val Factory = viewModelFactory {
+        initializer { CountViewModel(app().repository) }
+        initializer { OverviewViewModel(app().repository) }
+    }
+}
+private fun CreationExtras.app(): WahlhelferApp =
+    this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as WahlhelferApp
+```
+```kotlin
+// ui/count/CountViewModel.kt
+package at.htl.wahlhelfer.ui.count
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import at.htl.wahlhelfer.data.PartyRepository
+import at.htl.wahlhelfer.data.local.Party
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+
+class CountViewModel(private val repo: PartyRepository) : ViewModel() {
+    val parties: StateFlow<List<Party>> =
+        repo.parties.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    init { viewModelScope.launch { repo.seedIfEmpty() } }   // einmal Demo-Daten
+
+    fun plus(p: Party)  = viewModelScope.launch { repo.plus(p) }   // Klick -> Coroutine -> Room
+    fun minus(p: Party) = viewModelScope.launch { repo.minus(p) }
+    fun reset()         = viewModelScope.launch { repo.reset() }
+}
+```
+```kotlin
+// ui/overview/OverviewViewModel.kt
+package at.htl.wahlhelfer.ui.overview
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import at.htl.wahlhelfer.data.PartyRepository
+import at.htl.wahlhelfer.data.local.Party
+import kotlinx.coroutines.flow.*
+
+class OverviewViewModel(repo: PartyRepository) : ViewModel() {
+    val parties: StateFlow<List<Party>> =
+        repo.parties.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val total: StateFlow<Int> =
+        repo.total.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+}
+```
+
+**⑧ Navigation + Screens**
+```kotlin
+// ui/navigation/WahlhelferNavHost.kt
+package at.htl.wahlhelfer.ui.navigation
+import androidx.compose.runtime.Composable
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import at.htl.wahlhelfer.ui.about.AboutScreen
+import at.htl.wahlhelfer.ui.count.CountScreen
+import at.htl.wahlhelfer.ui.home.HomeScreen
+import at.htl.wahlhelfer.ui.overview.OverviewScreen
+
+@Composable
+fun WahlhelferNavHost() {
+    val nav = rememberNavController()
+    NavHost(nav, startDestination = "home") {
+        composable("home") {
+            HomeScreen(
+                onCount    = { nav.navigate("count") },
+                onOverview = { nav.navigate("overview") },
+                onAbout    = { nav.navigate("about") })
+        }
+        composable("count")    { CountScreen(onBack = { nav.popBackStack() }, onAbout = { nav.navigate("about") }) }
+        composable("overview") { OverviewScreen(onBack = { nav.popBackStack() }, onAbout = { nav.navigate("about") }) }
+        composable("about")    { AboutScreen(onBack = { nav.popBackStack() }) }
+    }
+}
+```
+```kotlin
+// ui/count/CountScreen.kt  — Liste + / − + Reset, liest aus DB
+package at.htl.wahlhelfer.ui.count
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import at.htl.wahlhelfer.ui.AppViewModelProvider
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CountScreen(
+    onBack: () -> Unit,
+    onAbout: () -> Unit,
+    vm: CountViewModel = viewModel(factory = AppViewModelProvider.Factory)
+) {
+    val parties by vm.parties.collectAsStateWithLifecycle()
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Zählen") },
+            actions = { TextButton(onClick = vm::reset) { Text("Reset") }
+                        TextButton(onClick = onAbout) { Text("About") } }) }
+    ) { p ->
+        LazyColumn(Modifier.padding(p)) {
+            items(parties, key = { it.id }) { party ->
+                ListItem(
+                    headlineContent  = { Text(party.name) },
+                    supportingContent = { Text("Stimmen: ${party.votes}") },
+                    trailingContent  = {
+                        Row {
+                            Button(onClick = { vm.minus(party) }) { Text("−") }
+                            Spacer(Modifier.width(8.dp))
+                            Button(onClick = { vm.plus(party) })  { Text("+") }
+                        }
+                    })
+                HorizontalDivider()
+            }
+        }
+    }
+}
+```
+```kotlin
+// ui/overview/OverviewScreen.kt  — Gesamtstand aus DB
+package at.htl.wahlhelfer.ui.overview
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import at.htl.wahlhelfer.ui.AppViewModelProvider
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OverviewScreen(
+    onBack: () -> Unit,
+    onAbout: () -> Unit,
+    vm: OverviewViewModel = viewModel(factory = AppViewModelProvider.Factory)
+) {
+    val parties by vm.parties.collectAsStateWithLifecycle()
+    val total   by vm.total.collectAsStateWithLifecycle()
+    Scaffold(topBar = { TopAppBar(title = { Text("Übersicht") }) }) { p ->
+        Column(Modifier.padding(p).padding(16.dp)) {
+            Text("Gesamt: $total Stimmen", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(8.dp))
+            LazyColumn {
+                items(parties, key = { it.id }) { Text("${it.name}: ${it.votes}") }
+            }
+        }
+    }
+}
+```
+```kotlin
+// ui/home/HomeScreen.kt  — nur Buttons
+package at.htl.wahlhelfer.ui.home
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun HomeScreen(onCount: () -> Unit, onOverview: () -> Unit, onAbout: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(24.dp)) {
+        Button(onClick = onCount,    modifier = Modifier.fillMaxWidth()) { Text("Stimmen zählen") }
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onOverview, modifier = Modifier.fillMaxWidth()) { Text("Übersicht") }
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onAbout,    modifier = Modifier.fillMaxWidth()) { Text("About") }
+    }
+}
+// ui/about/AboutScreen.kt analog: Text + Button(onClick = onBack) { Text("Zurück") }
+```
+```kotlin
+// MainActivity.kt  — Einstiegspunkt
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    setContent { WahlhelferTheme { WahlhelferNavHost() } }   // Theme-Name = dein Projektname
+}
+```
+
+> ⚠️ **Navigation-Hinweis:** Dieses Skelett nutzt **Navigation-Compose** (`androidx.navigation:navigation-compose`) — das ist die Standard- und am breitesten dokumentierte Variante und reicht für „4 Screens + Zurück" locker. Falls dein Lehrer explizit **Navigation 3** (`androidx.navigation3`) verlangt: das Konzept ist identisch (Back-Stack + NavHost/NavDisplay), aber die API/Imports unterscheiden sich — dann den genauen Import in seiner Doku/Franklyn prüfen. Im Zweifel diese Variante, die **kompiliert sicher**.
+
+> **Wenn dieses Skelett steht, hast du Room + MVVM + Repository + Navigation + Flow komplett.** Den Rest (Styling, About-Text) drauflegen.
