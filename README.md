@@ -6,7 +6,7 @@
 
 ---
 
-## 🎯 TEST-TAG SCHNELLSTART — „Der größere Wahlhelfer"
+## Der größere Wahlhelfer
 
 > **Open-Book-Strategie:** Diesen Block von oben nach unten abarbeiten. Code ist schon auf `Party`/`votes` gemünzt — du musst NICHTS mehr umbenennen, nur **Package-Name** anpassen und Lücken füllen.
 > **#1-Falle vermeiden:** überall `at.htl.wahlhelfer` durch deinen echten Package-Namen ersetzen (Strg+R „Replace in Files").
